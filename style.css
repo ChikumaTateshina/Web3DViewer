@@ -22,7 +22,7 @@ body { margin: 0; overflow: hidden; }
     display: flex;
     flex-direction: column;
     gap: 8px;
-    z-index: 100;
+    z-index: 110;
 }
 #btn-group button {
     width: 44px;
@@ -114,21 +114,31 @@ body { margin: 0; overflow: hidden; }
     to   { transform: rotate(360deg); }
 }
 
-/* 操作方法：原則常時表示 */
+/* 操作方法：原則常時表示。右下のボタン列（#btn-group）と重ならないよう、
+   幅を画面幅からボタン列分を差し引いた範囲に収め、収まらない場合は折り返す */
 #controls-hint {
     position: fixed;
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
+    max-width: calc(100vw - 96px);
     background: rgba(0, 0, 0, 0.55);
     color: #fff;
     padding: 10px 20px;
     border-radius: 20px;
     font-family: sans-serif;
     font-size: 13px;
-    pointer-events: none;
+    text-align: center;
     white-space: nowrap;
+    pointer-events: none;
     z-index: 100;
+}
+
+@media (max-width: 640px) {
+    #controls-hint {
+        white-space: normal;
+        line-height: 1.6;
+    }
 }
 
 .hint-pc { display: block; }

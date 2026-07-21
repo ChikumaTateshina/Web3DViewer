@@ -96,31 +96,38 @@ if (CONFIG.enableWebVR && navigator.xr && navigator.xr.isSessionSupported) {
 }
 
 // ---- AR/VRモードに入ったときの視点調整 ----
-// AR/VRセッション中はXR機器の実際の位置・向きがそのままカメラに反映され、通常モードの
-// カメラ位置（cameraHome、orbit-controls経由の位置）は使われなくなる。そのため、camera-rig
-// を包む xr-rig（親エンティティ）の位置を「XRトラッキング空間の原点オフセット」として使い、
-// AR/VRに入った瞬間だけ CONFIG.xrCameraPosition を適用する。
+// AR/VRセッション中はXR機器の実際の位置・向きがそのままカメラ（camera-rig）に反映され、
+// 通常モードのカメラ位置（cameraHome、orbit-controls経由の位置）は使われなくなる。
+// camera-rig の位置・向きはXR機器のトラッキングに完全に委ね、書き換えない。
+// camera-rig を包む xr-rig（親エンティティ）の位置を「XRトラッキング空間の原点オフセット」
+// として使い、AR/VRに入った瞬間だけ CONFIG.xrCameraPosition を適用する。
 const xrPos = CONFIG.xrCameraPosition;
 scene.addEventListener('enter-vr', () => {
     xrRig.setAttribute('position', `${xrPos.x} ${xrPos.y} ${xrPos.z}`);
 
-    const oc = getOC();
-    if (scene.is('ar-mode')) {
-        // aframe-orbit-controls はAR/VR突入時に一律で controls を無効化してしまう。
-        // ARでは現実空間を背景にしつつ、通常どおりドラッグ回転・ピンチズーム・2本指移動を
-        // 使えるようにしたいので、ARのときだけ明示的に再度有効化する
-        if (oc && oc.controls) oc.controls.enabled = true;
-    } else {
-        // VR: 視点の向きはヘッドセット/端末の向きがそのまま反映されるので orbit-controls の
-        // ドラッグ回転は使わない（無効化されたまま）。前後左右の移動だけタッチ/キーボードで
-        // 行えるようにする
-        rig.setAttribute('movement-controls', 'controls: touch, keyboard; fly: false');
+    if (!scene.is('ar-mode')) {
+        // VR: 前後左右の移動をタッチ（仮想スティック）/キーボードで行えるようにする。
+        // camera-rig ではなく xr-rig（オフセット用の親）に付与することで、XR機器の実際の
+        // トラッキング位置（camera-rigのローカル姿勢）と競合しない。端末が位置トラッキング
+        // に対応していれば、実際に持って歩いた分の移動もそのまま重ねて反映される
+        xrRig.setAttribute('movement-controls', 'controls: touch, keyboard; fly: false');
     }
+    // AR/ジャイロモード中の1〜3本指操作（モデルの回転・拡縮・移動）は arTouch* が担当するため、
+    // camera-rig の orbit-controls はAR中も無効のままにする（aframe-orbit-controls の既定動作）
 });
 
 scene.addEventListener('exit-vr', () => {
     xrRig.setAttribute('position', '0 0 0');
-    rig.removeAttribute('movement-controls');
+    xrRig.removeAttribute('movement-controls');
+
+    // camera-rig の位置・向きはXR機器のトラッキングに委ねていたため、セッション終了時点では
+    // 設定したホーム位置とは無関係な値が残っている。通常モードに戻ったら明示的にホームへ戻す
+    const oc = getOC();
+    if (oc && oc.controls) {
+        const camObj = getCamObj(oc);
+        if (camObj) camObj.position.set(HOME.px, HOME.py, HOME.pz);
+        oc.controls.target.set(HOME.tx, HOME.ty, HOME.tz);
+    }
 });
 
 // ---- 端末の向きで視点操作するボタン（対応端末のみ表示） ----
@@ -298,9 +305,10 @@ function enableGyro() {
     gyroBase        = null;
     lastOrientation = null;
     gyroActive      = true;
-    // カメラの位置自体は動かさないので、ドラッグでの回転（enableRotate）やピンチズームは
-    // ジャイロ操作中も引き続き使える（ドラッグで位置を動かせば、その新しい位置を起点として
-    // ジャイロでの視線変更が続く）
+    // カメラの位置・向きは端末の向きだけで決めるので、orbit-controlsによるドラッグでの
+    // カメラ操作は無効化する。1〜3本指操作はAR中と同じくモデル側の回転・拡縮・移動として
+    // arTouch* が引き続き扱う（ARモードと統一した挙動）
+    oc.controls.enabled = false;
 
     stopIdle();
     clearTimeout(idleTimer);
@@ -315,7 +323,7 @@ function disableGyro() {
     window.removeEventListener('deviceorientation', onDeviceOrientation);
 
     const oc = getOC();
-    if (oc && oc.controls) oc.controls.enableRotate = true;
+    if (oc && oc.controls) oc.controls.enabled = true;
 
     gyroBtn.classList.remove('active');
     idleTimer = setTimeout(startIdle, ORBIT_DELAY * 1000);
@@ -363,6 +371,93 @@ function gyroLoop() {
     requestAnimationFrame(gyroLoop);
 }
 requestAnimationFrame(gyroLoop);
+
+// ---- AR/ジャイロモード中の操作（モデルの回転・拡大縮小・移動） ----
+// AR・VRセッション中はXR機器の実際の位置・向きがそのままカメラに反映されるため、通常モードの
+// ようにドラッグでカメラ自体を動かす操作は成立しない（書き換えてもXR機器のトラッキング位置に
+// 毎フレーム上書きされてしまう）。ジャイロモードも同様に、カメラの向きは端末の向きだけで決まる。
+// そのため、AR中およびジャイロ操作中の1本指ドラッグ／2本指ピンチ・ドラッグは、カメラではなく
+// 「モデル側」を回転・拡大縮小・移動させることで、通常モードと同じ感覚の操作を実現する。
+const ARTOUCH_ROTATE_DEG_PER_PX = 0.5;   // 1本指ドラッグ: 1pxあたりの回転角度（度）
+const ARTOUCH_PAN_PER_PX        = 0.01;  // 2本指ドラッグ: 1pxあたりの移動量
+const ARTOUCH_SCALE_MIN         = 0.1;   // モデル拡大縮小の下限（config指定スケールに対する倍率）
+const ARTOUCH_SCALE_MAX         = 10;    // 同・上限
+
+const baseModelScale = { x: ms.x, y: ms.y, z: ms.z }; // config.js で指定した基準スケール
+let arTouchState = null;
+
+function arTouchActive() {
+    return scene.is('ar-mode') || gyroActive;
+}
+
+function touchMidpoint(t0, t1) {
+    return { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 };
+}
+
+function touchDistance(t0, t1) {
+    return Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+}
+
+function onArTouchStart(e) {
+    if (!arTouchActive()) return;
+    if (e.touches.length === 1) {
+        arTouchState = {
+            mode: 'rotate',
+            x: e.touches[0].clientX,
+            rotY: modelEntity.object3D.rotation.y,
+        };
+    } else if (e.touches.length >= 2) {
+        const mid = touchMidpoint(e.touches[0], e.touches[1]);
+        arTouchState = {
+            mode: 'pinch-pan',
+            dist: touchDistance(e.touches[0], e.touches[1]) || 1,
+            midX: mid.x,
+            midY: mid.y,
+            scale: baseModelScale.x ? modelEntity.object3D.scale.x / baseModelScale.x : 1,
+            posX: modelEntity.object3D.position.x,
+            posZ: modelEntity.object3D.position.z,
+        };
+    }
+}
+
+function onArTouchMove(e) {
+    if (!arTouchActive() || !arTouchState) return;
+
+    if (arTouchState.mode === 'rotate' && e.touches.length === 1) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - arTouchState.x;
+        modelEntity.object3D.rotation.y = arTouchState.rotY + dx * ARTOUCH_ROTATE_DEG_PER_PX * DEG2RAD;
+    } else if (arTouchState.mode === 'pinch-pan' && e.touches.length >= 2) {
+        e.preventDefault();
+        const dist = touchDistance(e.touches[0], e.touches[1]);
+        const mid  = touchMidpoint(e.touches[0], e.touches[1]);
+
+        const scale = Math.max(ARTOUCH_SCALE_MIN, Math.min(ARTOUCH_SCALE_MAX, arTouchState.scale * (dist / arTouchState.dist)));
+        modelEntity.object3D.scale.set(baseModelScale.x * scale, baseModelScale.y * scale, baseModelScale.z * scale);
+
+        modelEntity.object3D.position.x = arTouchState.posX + (mid.x - arTouchState.midX) * ARTOUCH_PAN_PER_PX;
+        modelEntity.object3D.position.z = arTouchState.posZ + (mid.y - arTouchState.midY) * ARTOUCH_PAN_PER_PX;
+    }
+}
+
+function onArTouchEnd(e) {
+    if (!arTouchActive()) { arTouchState = null; return; }
+    if (e.touches.length === 0) {
+        arTouchState = null;
+    } else if (e.touches.length === 1) {
+        // 2本指から1本指に減った場合は回転操作として再スタートする
+        arTouchState = {
+            mode: 'rotate',
+            x: e.touches[0].clientX,
+            rotY: modelEntity.object3D.rotation.y,
+        };
+    }
+}
+
+document.addEventListener('touchstart',  onArTouchStart, { passive: true });
+document.addEventListener('touchmove',   onArTouchMove,  { passive: false });
+document.addEventListener('touchend',    onArTouchEnd,   { passive: true });
+document.addEventListener('touchcancel', onArTouchEnd,   { passive: true });
 
 // ---- 自動オービット rAF ループ ----
 // autoRotate に依存せず、毎フレーム球面座標でカメラ位置を直接計算・設定する。

@@ -4,7 +4,9 @@ const HOME   = CONFIG.cameraHome;
 
 document.title = CONFIG.pageTitle;
 document.getElementById('title').innerHTML = CONFIG.displayTitle.join('<br>');
-document.getElementById('model-building').setAttribute('src', `Assets/${CONFIG.modelFile}`);
+
+const modelEntity = document.getElementById('model-entity');
+modelEntity.setAttribute('gltf-model', `Assets/${CONFIG.modelFile}`);
 
 const scene = document.getElementById('scene');
 scene.setAttribute('fog', `type: linear; color: ${CONFIG.fogColor}; near: ${CONFIG.fogNear}; far: ${CONFIG.fogFar}`);
@@ -26,15 +28,30 @@ if (CONFIG.backgroundType === 'image' && CONFIG.backgroundImage) {
 }
 
 // ---- モデルの位置・回転・拡縮 ----
-const modelEntity = document.getElementById('model-entity');
 const mp = CONFIG.modelPosition, mr = CONFIG.modelRotation, ms = CONFIG.modelScale;
 modelEntity.setAttribute('position', `${mp.x} ${mp.y} ${mp.z}`);
 modelEntity.setAttribute('rotation', `${mr.x} ${mr.y} ${mr.z}`);
 modelEntity.setAttribute('scale', `${ms.x} ${ms.y} ${ms.z}`);
 
 // ---- glTFアニメーションの再生 ----
+// animation-mixer は tick ごとに再生を進めるだけで、視点操作（ドラッグ／ジャイロ／自動オービット／
+// リセット）とは独立して動作するため、ユーザー操作中も常にアニメーションが再生され続ける。
+const animBtn      = document.getElementById('anim-btn');
+const iconPause    = document.getElementById('icon-pause');
+const iconPlay     = document.getElementById('icon-play');
+let animPaused     = false;
+
 if (CONFIG.playAnimations) {
     modelEntity.setAttribute('animation-mixer', `clip: ${CONFIG.animationClip || '*'}; loop: ${CONFIG.animationLoop}; timeScale: ${CONFIG.animationTimeScale}`);
+
+    animBtn.style.display = '';
+    animBtn.addEventListener('click', () => {
+        animPaused = !animPaused;
+        modelEntity.setAttribute('animation-mixer', 'timeScale', animPaused ? 0 : CONFIG.animationTimeScale);
+        iconPause.style.display = animPaused ? 'none' : '';
+        iconPlay.style.display  = animPaused ? ''     : 'none';
+        animBtn.title = animPaused ? 'アニメーションを再生' : 'アニメーションを一時停止';
+    });
 }
 
 // ---- 読み込み中表示 ----

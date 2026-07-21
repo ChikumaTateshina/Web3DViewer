@@ -7,6 +7,7 @@
 
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-orbit-controls@1.3.2/dist/aframe-orbit-controls.min.js"></script>
+    <script src="https://unpkg.com/aframe-extras@7.5.4/dist/aframe-extras.min.js"></script>
     <script src="config.js"></script>
 
     <link rel="stylesheet" href="style.css">
@@ -19,9 +20,7 @@
         fog="type: linear; color: #8FA8BF; near: 60; far: 120"
         vr-mode-ui="enabled: false">
 
-        <a-assets>
-            <a-asset-item id="model-building" src="Assets/No_10-Bloom.gltf"></a-asset-item>
-        </a-assets>
+        <a-assets></a-assets>
 
         <a-sky id="sky" visible="false" material="fog: false"></a-sky>
 
@@ -30,7 +29,7 @@
         <a-light type="directional" color="#C8DDEF" intensity="0.35" position="5 3 -5"></a-light>
         <a-light type="directional" color="#FFFFFF" intensity="0.18" position="0 4 -10"></a-light>
 
-        <a-entity id="model-entity" gltf-model="#model-building" position="0 0 0" rotation="0 0 0" scale="1 1 1"></a-entity>
+        <a-entity id="model-entity" position="0 0 0" rotation="0 0 0" scale="1 1 1"></a-entity>
 
         <a-entity id="camera-rig" camera orbit-controls="
             target: 0 2 0;
@@ -59,6 +58,14 @@
         </button>
         <button id="ar-btn" title="ARで表示" style="display:none">
             <span class="ar-label">AR</span>
+        </button>
+        <button id="anim-btn" title="アニメーションを一時停止" style="display:none">
+            <svg id="icon-pause" viewBox="0 0 24 24">
+                <path d="M8 5h3v14H8V5zm5 0h3v14h-3V5z"/>
+            </svg>
+            <svg id="icon-play" viewBox="0 0 24 24" style="display:none">
+                <path d="M8 5v14l11-7z"/>
+            </svg>
         </button>
         <button id="reset-btn" title="視点をリセット">
             <svg viewBox="0 0 24 24">

@@ -1,0 +1,13 @@
+# 許可リスト方式：まず全てを無視し、公開したいファイル／フォルダだけを明示的に許可する
+*
+
+!/.gitignore
+!/index.html
+!/style.css
+!/main.js
+!/config.js
+!/README.md
+!/LICENSE
+
+!/Assets/
+!/Assets/**

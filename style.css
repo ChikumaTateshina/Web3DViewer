@@ -1,0 +1,142 @@
+body { margin: 0; overflow: hidden; }
+
+#title {
+    position: fixed;
+    top: 20px;
+    left: 24px;
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "游明朝", Georgia, serif;
+    font-size: clamp(13px, 2.2vw, 20px);
+    font-weight: 600;
+    color: #FFFFFF;
+    letter-spacing: 0.05em;
+    line-height: 1.6;
+    pointer-events: none;
+    z-index: 100;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.35);
+}
+
+#btn-group {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 100;
+}
+#btn-group button {
+    width: 44px;
+    height: 44px;
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+#btn-group button:hover { background: rgba(0, 0, 0, 0.75); }
+#btn-group button svg { width: 22px; height: 22px; fill: #fff; }
+#reset-btn svg { transition: transform 0.4s; }
+#reset-btn.spinning svg { transform: rotate(-360deg); }
+#gyro-btn.active,
+#gyro-btn.active:hover { background: rgba(64, 140, 255, 0.9); }
+.ar-label {
+    font-family: sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.02em;
+}
+
+#loading-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: #12181f;
+    color: #fff;
+    font-family: sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.05em;
+    z-index: 200;
+    transition: opacity 0.6s ease;
+}
+#loading-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+#loading-spinner {
+    width: 34px;
+    height: 34px;
+    border: 3px solid rgba(255, 255, 255, 0.25);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: loading-spin 0.9s linear infinite;
+}
+@keyframes loading-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* 操作誘導：ユーザーが初めて触れるまでのみ表示 */
+#explore-prompt {
+    position: fixed;
+    bottom: 72px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-family: sans-serif;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 1.2s;
+}
+#explore-prompt.visible { opacity: 1; }
+#explore-icon {
+    display: inline-block;
+    animation: slow-spin 5s linear infinite;
+}
+@keyframes slow-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+/* 操作方法：原則常時表示 */
+#controls-hint {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-family: sans-serif;
+    font-size: 13px;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 100;
+}
+
+.hint-pc { display: block; }
+.hint-sp { display: none; }
+
+@media (pointer: coarse) {
+    .hint-pc { display: none; }
+    .hint-sp { display: block; }
+}
+
+/* MIT License | github.com/ChikumaTateshina/Web3DViewer */

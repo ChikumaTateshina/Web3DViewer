@@ -138,22 +138,28 @@ let orbitR     = null;
 let orbitPhi   = null;
 
 // オービットの水平回転・仰角変化の「現在速度」と、なめらかに近づけていく「目標速度」
-// （目標速度を一定間隔でランダムに選び直すことで、毎回異なる軌道になる）
-let orbitThetaSpeed     = 0;
-let orbitThetaSpeedGoal = 0;
-let orbitPhiSpeed       = 0;
-let orbitPhiSpeedGoal   = 0;
-let orbitLastTime       = null; // 前フレームのtimestamp（秒）。dt算出用
-let orbitRetargetAt     = 0;    // 次に目標速度を選び直すtimestamp（秒）
+// 水平回転（テーマ）は「向き・速さ」を長い間隔でしか選び直さないことで、狭い範囲での
+// 反復運動ではなく、モデルの全周が見えるくらい大きく周回する。仰角はこれまで通り
+// 短い間隔でゆらいで生き生きとした見た目にする。
+let orbitThetaSpeed      = 0;
+let orbitThetaSpeedGoal  = 0;
+let orbitPhiSpeed        = 0;
+let orbitPhiSpeedGoal    = 0;
+let orbitLastTime        = null; // 前フレームのtimestamp（秒）。dt算出用
+let orbitThetaRetargetAt = 0;    // 次に水平回転の向き・速さを選び直すtimestamp（秒）
+let orbitPhiRetargetAt   = 0;    // 次に仰角の速さを選び直すtimestamp（秒）
 
-const ORBIT_PHI_CENTER       = Math.PI / 2.4; // 仰角の基準値（約75°）
-const ORBIT_PHI_RANGE        = Math.PI / 10;  // 仰角の可動範囲（±18°）
-const ORBIT_THETA_SPEED_MAX  = 0.09;          // 水平回転速度の最大値（rad/秒）
-const ORBIT_PHI_SPEED_MAX    = 0.05;          // 仰角変化速度の最大値（rad/秒）
-const ORBIT_SPEED_EASE_SEC   = 1.5;           // 目標速度へなめらかに近づくまでの目安秒数
-const ORBIT_RETARGET_MIN_SEC = 3;             // 次に目標速度を選び直すまでの最小秒数
-const ORBIT_RETARGET_MAX_SEC = 7;             // 同・最大秒数
-const ORBIT_RETURN_EASE_SEC  = 6;             // 無操作が続いた後、ズーム・仰角・注視点をホームへ戻す際の滑らかさの目安秒数
+const ORBIT_PHI_CENTER            = Math.PI / 2.4; // 仰角の基準値（約75°）
+const ORBIT_PHI_RANGE             = Math.PI / 10;  // 仰角の可動範囲（±18°）
+const ORBIT_THETA_SPEED_MIN       = 0.05;          // 水平回転速度の最小値（rad/秒）。反復運動に見えないよう常にある程度の速さを保つ
+const ORBIT_THETA_SPEED_MAX       = 0.12;          // 水平回転速度の最大値（rad/秒）
+const ORBIT_PHI_SPEED_MAX         = 0.05;          // 仰角変化速度の最大値（rad/秒）
+const ORBIT_SPEED_EASE_SEC        = 1.5;           // 目標速度へなめらかに近づくまでの目安秒数
+const ORBIT_THETA_RETARGET_MIN_SEC = 20;           // 水平回転の向き・速さを選び直すまでの最小秒数（長めにして大きく周回させる）
+const ORBIT_THETA_RETARGET_MAX_SEC = 40;           // 同・最大秒数
+const ORBIT_PHI_RETARGET_MIN_SEC  = 3;             // 仰角の速さを選び直すまでの最小秒数
+const ORBIT_PHI_RETARGET_MAX_SEC  = 7;             // 同・最大秒数
+const ORBIT_RETURN_EASE_SEC       = 6;             // 無操作が続いた後、ズーム・仰角・注視点をホームへ戻す際の滑らかさの目安秒数
 
 // ホーム視点を球面座標（注視点からの距離・仰角）に変換しておく。
 // 無操作が続いた際、水平回転は継続したまま、ズーム・仰角・注視点だけをこの値へなめらかに近づける。
@@ -165,11 +171,15 @@ const HOME_ORBIT = (() => {
     return { r, phi: Math.acos(Math.max(-1, Math.min(1, dy / r))) };
 })();
 
-// 水平回転・仰角変化の目標速度をランダムに選び直す（0付近を避けて完全停止しないようにする）
-function randomizeOrbitTargets() {
+// 水平回転の目標速度（向き・速さ）をランダムに選び直す。0付近を避けて完全停止しないようにする
+function randomizeThetaTarget() {
     const thetaSign = Math.random() < 0.5 ? -1 : 1;
-    orbitThetaSpeedGoal = thetaSign * ORBIT_THETA_SPEED_MAX * (0.3 + Math.random() * 0.7);
-    orbitPhiSpeedGoal   = (Math.random() * 2 - 1) * ORBIT_PHI_SPEED_MAX;
+    orbitThetaSpeedGoal = thetaSign * (ORBIT_THETA_SPEED_MIN + Math.random() * (ORBIT_THETA_SPEED_MAX - ORBIT_THETA_SPEED_MIN));
+}
+
+// 仰角の目標速度をランダムに選び直す
+function randomizePhiTarget() {
+    orbitPhiSpeedGoal = (Math.random() * 2 - 1) * ORBIT_PHI_SPEED_MAX;
 }
 
 // ---- 端末の向き連動用の状態 ----
@@ -313,14 +323,21 @@ function autoOrbitLoop(timestamp) {
                     orbitR     = Math.sqrt(dx*dx + dy*dy + dz*dz) || 15;
                     orbitTheta = Math.atan2(dx, dz);
                     orbitPhi   = Math.acos(Math.max(-1, Math.min(1, dy / orbitR)));
-                    randomizeOrbitTargets();
-                    orbitRetargetAt = t + ORBIT_RETARGET_MIN_SEC + Math.random() * (ORBIT_RETARGET_MAX_SEC - ORBIT_RETARGET_MIN_SEC);
+                    randomizeThetaTarget();
+                    randomizePhiTarget();
+                    orbitThetaRetargetAt = t + ORBIT_THETA_RETARGET_MIN_SEC + Math.random() * (ORBIT_THETA_RETARGET_MAX_SEC - ORBIT_THETA_RETARGET_MIN_SEC);
+                    orbitPhiRetargetAt   = t + ORBIT_PHI_RETARGET_MIN_SEC   + Math.random() * (ORBIT_PHI_RETARGET_MAX_SEC   - ORBIT_PHI_RETARGET_MIN_SEC);
                 }
 
-                // 一定間隔で目標速度を選び直す
-                if (t >= orbitRetargetAt) {
-                    randomizeOrbitTargets();
-                    orbitRetargetAt = t + ORBIT_RETARGET_MIN_SEC + Math.random() * (ORBIT_RETARGET_MAX_SEC - ORBIT_RETARGET_MIN_SEC);
+                // 水平回転は長い間隔でしか向き・速さを選び直さない（モデルの全周が見えるくらい大きく周回させる）
+                if (t >= orbitThetaRetargetAt) {
+                    randomizeThetaTarget();
+                    orbitThetaRetargetAt = t + ORBIT_THETA_RETARGET_MIN_SEC + Math.random() * (ORBIT_THETA_RETARGET_MAX_SEC - ORBIT_THETA_RETARGET_MIN_SEC);
+                }
+                // 仰角は短い間隔でゆらぐ
+                if (t >= orbitPhiRetargetAt) {
+                    randomizePhiTarget();
+                    orbitPhiRetargetAt = t + ORBIT_PHI_RETARGET_MIN_SEC + Math.random() * (ORBIT_PHI_RETARGET_MAX_SEC - ORBIT_PHI_RETARGET_MIN_SEC);
                 }
 
                 // 現在速度を目標速度へなめらかに近づける（急な方向転換を避ける）
@@ -387,6 +404,12 @@ function stopIdle() {
     orbitTheta     = null;
     orbitR         = null;
     orbitPhi       = null;
+    // 速度も静止状態に戻す。次にアイドルが始まった際、前回の巡航速度をそのまま引き継いで
+    // いきなり動き出すのではなく、必ず止まった状態からなめらかに加速し始めるようにするため。
+    orbitThetaSpeed     = 0;
+    orbitThetaSpeedGoal = 0;
+    orbitPhiSpeed       = 0;
+    orbitPhiSpeedGoal   = 0;
     clearTimeout(exploreTimer);
     clearTimeout(resetTimer);
     cancelAnimationFrame(resetAnim);

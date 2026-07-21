@@ -39,7 +39,7 @@ const VIEWER_CONFIG = {
     // trueにするとVR/ARヘッドセットやスマートフォンでの表示ボタンを有効化します
     // enableWebAR は対応端末・ブラウザ（WebXR対応、主にAndroid Chrome等）でのみボタンが表示されます
     enableWebVR: false,
-    enableWebAR: false,
+    enableWebAR: true,
 
     // trueにすると、スマートフォンなどの向きセンサーと視点を同期させるボタンを有効化します
     // 対応端末（ジャイロセンサー搭載のスマートフォン等）でのみボタンが表示されます

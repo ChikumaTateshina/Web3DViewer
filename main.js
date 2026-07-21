@@ -149,20 +149,11 @@ let orbitLastTime        = null; // 前フレームのtimestamp（秒）。dt算
 let orbitThetaRetargetAt = 0;    // 次に水平回転の向き・速さを選び直すtimestamp（秒）
 let orbitPhiRetargetAt   = 0;    // 次に仰角の速さを選び直すtimestamp（秒）
 
-const ORBIT_PHI_CENTER            = Math.PI / 2.4; // 仰角の基準値（約75°）
-const ORBIT_PHI_RANGE             = Math.PI / 10;  // 仰角の可動範囲（±18°）
-const ORBIT_THETA_SPEED_MIN       = 0.05;          // 水平回転速度の最小値（rad/秒）。反復運動に見えないよう常にある程度の速さを保つ
-const ORBIT_THETA_SPEED_MAX       = 0.12;          // 水平回転速度の最大値（rad/秒）
-const ORBIT_PHI_SPEED_MAX         = 0.05;          // 仰角変化速度の最大値（rad/秒）
-const ORBIT_SPEED_EASE_SEC        = 1.5;           // 目標速度へなめらかに近づくまでの目安秒数
-const ORBIT_THETA_RETARGET_MIN_SEC = 20;           // 水平回転の向き・速さを選び直すまでの最小秒数（長めにして大きく周回させる）
-const ORBIT_THETA_RETARGET_MAX_SEC = 40;           // 同・最大秒数
-const ORBIT_PHI_RETARGET_MIN_SEC  = 3;             // 仰角の速さを選び直すまでの最小秒数
-const ORBIT_PHI_RETARGET_MAX_SEC  = 7;             // 同・最大秒数
-const ORBIT_RETURN_EASE_SEC       = 6;             // 無操作が続いた後、ズーム・仰角・注視点をホームへ戻す際の滑らかさの目安秒数
+const DEG2RAD = Math.PI / 180;
 
 // ホーム視点を球面座標（注視点からの距離・仰角）に変換しておく。
 // 無操作が続いた際、水平回転は継続したまま、ズーム・仰角・注視点だけをこの値へなめらかに近づける。
+// 上下方向のランダムな揺れも、この仰角（cameraHomeで指定した見上げ角）を中心に行う。
 const HOME_ORBIT = (() => {
     const dx = HOME.px - HOME.tx;
     const dy = HOME.py - HOME.ty;
@@ -170,6 +161,19 @@ const HOME_ORBIT = (() => {
     const r  = Math.sqrt(dx * dx + dy * dy + dz * dz) || 15;
     return { r, phi: Math.acos(Math.max(-1, Math.min(1, dy / r))) };
 })();
+
+const AUTO_ORBIT = CONFIG.autoOrbit;
+const ORBIT_PHI_CENTER             = HOME_ORBIT.phi;                             // 仰角の基準値（cameraHomeの見上げ角）
+const ORBIT_PHI_RANGE              = (AUTO_ORBIT.verticalRangeDeg / 2) * DEG2RAD; // 仰角の可動範囲（基準値からの片側の振れ幅）
+const ORBIT_THETA_SPEED_MIN        = AUTO_ORBIT.speedMinDeg * DEG2RAD;           // 水平回転速度の最小値（rad/秒）。反復運動に見えないよう常にある程度の速さを保つ
+const ORBIT_THETA_SPEED_MAX        = AUTO_ORBIT.speedMaxDeg * DEG2RAD;           // 水平回転速度の最大値（rad/秒）
+const ORBIT_PHI_SPEED_MAX          = AUTO_ORBIT.verticalSpeedMaxDeg * DEG2RAD;   // 仰角変化速度の最大値（rad/秒）
+const ORBIT_SPEED_EASE_SEC         = 1.5;  // 目標速度へなめらかに近づくまでの目安秒数
+const ORBIT_THETA_RETARGET_MIN_SEC = 20;   // 水平回転の向き・速さを選び直すまでの最小秒数（長めにして大きく周回させる）
+const ORBIT_THETA_RETARGET_MAX_SEC = 40;   // 同・最大秒数
+const ORBIT_PHI_RETARGET_MIN_SEC   = 3;    // 仰角の速さを選び直すまでの最小秒数
+const ORBIT_PHI_RETARGET_MAX_SEC   = 7;    // 同・最大秒数
+const ORBIT_RETURN_EASE_SEC        = 6;    // 無操作が続いた後、ズーム・仰角・注視点をホームへ戻す際の滑らかさの目安秒数
 
 // 水平回転の目標速度（向き・速さ）をランダムに選び直す。0付近を避けて完全停止しないようにする
 function randomizeThetaTarget() {

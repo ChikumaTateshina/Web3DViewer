@@ -68,7 +68,22 @@ const VIEWER_CONFIG = {
     idleOrbitDelaySec: 5,
 
     // 無操作状態が続いたときに初期視点へ自動的に戻るまでの秒数
-    idleResetDelaySec: 10
+    idleResetDelaySec: 10,
+
+    // 無操作時の自動回転（カメラが自動でぐるっと動く演出）の速さや上下の揺れ方を調整できます
+    autoOrbit: {
+        // 水平方向の回転速度の範囲（度/秒）。この範囲内でランダムに変化し続けます
+        // （値を大きくするほど速く回転します。min/maxを同じ値にすると常に一定速度になります）
+        speedMinDeg: 10,
+        speedMaxDeg: 25,
+
+        // 上下方向のランダムな揺れの可動範囲（度）。cameraHomeで指定した見上げ角を中心に、
+        // この範囲内で上下にゆっくり揺れ動きます（0にすると上下には揺れなくなります）
+        verticalRangeDeg: 90,
+
+        // 上下方向の揺れの変化速度の最大値（度/秒）
+        verticalSpeedMaxDeg: 10
+    }
 };
 
 // MIT License | github.com/ChikumaTateshina/Web3DViewer

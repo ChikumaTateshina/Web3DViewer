@@ -62,7 +62,7 @@ const VIEWER_CONFIG = {
 
     // 初期カメラ位置 (px, py, pz) と注視点 (tx, ty, tz)
     // 「視点をリセット」ボタンや自動リセットもこの位置に戻ります
-    cameraHome: { px: 5, py: 5, pz: 15, tx: 0, ty: 2, tz: 0 },
+    cameraHome: { px: 15, py: 15, pz: 15, tx: 0, ty: 2, tz: 0 },
 
     // 無操作状態が続いたときに自動回転を開始するまでの秒数
     idleOrbitDelaySec: 5,
@@ -82,7 +82,7 @@ const VIEWER_CONFIG = {
         verticalRangeDeg: 90,
 
         // 上下方向の揺れの変化速度の最大値（度/秒）
-        verticalSpeedMaxDeg: 10
+        verticalSpeedMaxDeg: 25
     }
 };
 

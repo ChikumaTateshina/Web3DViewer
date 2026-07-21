@@ -65,24 +65,26 @@ const VIEWER_CONFIG = {
     cameraHome: { px: 20, py: 20, pz: 15, tx: 0, ty: 2, tz: 0 },
 
     // 無操作状態が続いたときに自動回転を開始するまでの秒数
-    idleOrbitDelaySec: 5,
+    idleOrbitDelaySec: 30,
 
     // 無操作状態が続いたときに初期視点へ自動的に戻るまでの秒数
-    idleResetDelaySec: 10,
+    idleResetDelaySec: 60,
 
     // 無操作時の自動回転（カメラが自動でぐるっと動く演出）の速さや上下の揺れ方を調整できます
     autoOrbit: {
         // 水平方向の回転速度の範囲（度/秒）。この範囲内でランダムに変化し続けます
         // （値を大きくするほど速く回転します。min/maxを同じ値にすると常に一定速度になります）
-        speedMinDeg: 25,
-        speedMaxDeg: 90,
+        speedMinDeg: 10,
+        speedMaxDeg: 45,
 
         // 上下方向のランダムな揺れの可動範囲（度）。cameraHomeで指定した見上げ角を中心に、
-        // この範囲内で上下にゆっくり揺れ動きます（0にすると上下には揺れなくなります）
-        verticalRangeDeg: 90,
+        // この範囲内で上下にゆっくり揺れ動きます（0にすると上下には揺れなくなります）。
+        // 大きくするほど、水平線を越えてモデルを見上げるような動き（マイナス方向）も出てきます。
+        // 真上・真下付近（絶対値で±約8.6°以内）には安全のため到達しません
+        verticalRangeDeg: 160,
 
         // 上下方向の揺れの変化速度の最大値（度/秒）
-        verticalSpeedMaxDeg: 50
+        verticalSpeedMaxDeg: 20
     }
 };
 

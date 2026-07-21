@@ -174,6 +174,9 @@ const ORBIT_THETA_RETARGET_MAX_SEC = 40;   // 同・最大秒数
 const ORBIT_PHI_RETARGET_MIN_SEC   = 3;    // 仰角の速さを選び直すまでの最小秒数
 const ORBIT_PHI_RETARGET_MAX_SEC   = 7;    // 同・最大秒数
 const ORBIT_RETURN_EASE_SEC        = 6;    // 無操作が続いた後、ズーム・仰角・注視点をホームへ戻す際の滑らかさの目安秒数
+const ORBIT_PHI_ABS_MIN            = 0.15;          // 仰角の絶対下限（rad）。真上付近での見た目の破綻を防ぐ
+const ORBIT_PHI_ABS_MAX            = Math.PI - 0.15; // 仰角の絶対上限（rad）。真下付近での見た目の破綻を防ぐ
+                                                       // verticalRangeDeg をどれだけ大きくしても、この範囲内に収まる
 
 // 水平回転の目標速度（向き・速さ）をランダムに選び直す。0付近を避けて完全停止しないようにする
 function randomizeThetaTarget() {
@@ -360,8 +363,8 @@ function autoOrbitLoop(timestamp) {
                     orbitPhi += (HOME_ORBIT.phi - orbitPhi) * returnEase;
                     lerpVec(target, HOME.tx, HOME.ty, HOME.tz, returnEase);
                 } else {
-                    const phiMin = ORBIT_PHI_CENTER - ORBIT_PHI_RANGE;
-                    const phiMax = ORBIT_PHI_CENTER + ORBIT_PHI_RANGE;
+                    const phiMin = Math.max(ORBIT_PHI_ABS_MIN, ORBIT_PHI_CENTER - ORBIT_PHI_RANGE);
+                    const phiMax = Math.min(ORBIT_PHI_ABS_MAX, ORBIT_PHI_CENTER + ORBIT_PHI_RANGE);
                     let nextPhi  = orbitPhi + orbitPhiSpeed * dt;
                     if (nextPhi < phiMin || nextPhi > phiMax) {
                         nextPhi = Math.max(phiMin, Math.min(phiMax, nextPhi));

@@ -91,6 +91,37 @@ const VIEWER_CONFIG = {
 
         // 上下方向の揺れの変化速度の最大値（度/秒）
         verticalSpeedMaxDeg: 20
+    },
+
+    // ============================================================
+    // マーカー型AR（ar-marker.html）の設定
+    // 印刷／画面表示したマーカーにカメラを向けると、その上に3Dモデルが現実空間に
+    // 固定されて表示されます。マーカーの周りを歩いて横から覗き込むこともできます。
+    // ※ AR.js を使用します。カメラ映像を使うため https（GitHub Pages等）での公開が必要です。
+    // ============================================================
+    markerAR: {
+        // index.html（通常ビューア）の右下に「マーカーARで開く」ボタンを表示するか
+        enableButton: true,
+
+        // マーカーの種類:
+        //   "hiro"    … AR.js標準のHiroマーカー（準備不要。すぐ試せます）
+        //   "barcode" … 数字で識別するバーコードマーカー（barcodeValue で番号指定）
+        //   "pattern" … 自作マーカー（patternFile に .patt ファイル名を指定）
+        markerType: "hiro",
+
+        // markerType が "pattern" のときに使う .patt ファイル名（Assetsフォルダ内）
+        // .patt は https://ar-js-org.github.io/AR.js/three.js/examples/marker-training/examples/generator.html で作成できます
+        patternFile: "",
+
+        // markerType が "barcode" のときのバーコード番号（0〜63）
+        barcodeValue: 0,
+
+        // マーカー上に置くモデルの位置・回転（度）・スケール。
+        // マーカーの中心が原点(0,0,0)、マーカー1辺がおよそ1単位です。実物モデルが大きい場合は
+        // scale を小さくして、マーカーに乗るサイズに調整してください（例: 0.05 など）。
+        modelPosition: { x: 0, y: 0, z: 0 },
+        modelRotation: { x: 0, y: 0, z: 0 },
+        modelScale:    { x: 0.5, y: 0.5, z: 0.5 }
     }
 };
 

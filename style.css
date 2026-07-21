@@ -24,7 +24,8 @@ body { margin: 0; overflow: hidden; }
     gap: 8px;
     z-index: 110;
 }
-#btn-group button {
+#btn-group button,
+#btn-group a {
     width: 44px;
     height: 44px;
     background: rgba(0, 0, 0, 0.5);
@@ -34,10 +35,23 @@ body { margin: 0; overflow: hidden; }
     display: flex;
     align-items: center;
     justify-content: center;
+    text-decoration: none;
     transition: background 0.2s;
 }
-#btn-group button:hover { background: rgba(0, 0, 0, 0.75); }
+#btn-group button:hover,
+#btn-group a:hover { background: rgba(0, 0, 0, 0.75); }
 #btn-group button svg { width: 22px; height: 22px; fill: #fff; }
+/* マーカーAR導線ボタンは AR ラベルの下に小さく MARKER と添える */
+#marker-ar-btn { flex-direction: column; gap: 1px; }
+#marker-ar-btn .xr-label { font-size: 11px; line-height: 1; }
+#marker-ar-btn::after {
+    content: "MARKER";
+    font-family: sans-serif;
+    font-size: 6px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.03em;
+}
 #reset-btn svg { transition: transform 0.4s; }
 #reset-btn.spinning svg { transform: rotate(-360deg); }
 #gyro-btn.active,

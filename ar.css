@@ -1,0 +1,73 @@
+/* マーカー型AR（ar-marker.html）専用スタイル */
+body { margin: 0; overflow: hidden; }
+
+/* A-Frame が既定で挿入する VR/AR 突入ボタンや通知モーダルを隠す（自前UIに統一するため） */
+.a-enter-vr,
+.a-enter-ar,
+.a-orientation-modal,
+.a-loader-title { display: none !important; }
+
+/* AR.js が挿入するカメラ映像(video)を画面全体に敷く */
+.a-canvas, video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+}
+
+/* マーカー未検出時の案内（画面上部中央） */
+#ar-hint {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100vw - 40px);
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-family: sans-serif;
+    font-size: 14px;
+    text-align: center;
+    z-index: 100;
+    pointer-events: none;
+    transition: opacity 0.4s;
+}
+#ar-hint.hidden {
+    opacity: 0;
+}
+
+/* 右下：戻る／モード切り替えボタン */
+#ar-btn-group {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 110;
+}
+#ar-btn-group a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    width: 56px;
+    height: 56px;
+    background: rgba(0, 0, 0, 0.55);
+    border-radius: 10px;
+    text-decoration: none;
+}
+#ar-btn-group a:active { background: rgba(0, 0, 0, 0.8); }
+#ar-btn-group svg { width: 22px; height: 22px; }
+.ar-btn-label {
+    font-family: sans-serif;
+    font-size: 10px;
+    color: #fff;
+    letter-spacing: 0.02em;
+}
+
+/* MIT License | github.com/ChikumaTateshina/Web3DViewer */

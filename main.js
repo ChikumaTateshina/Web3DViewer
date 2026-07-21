@@ -95,6 +95,14 @@ if (CONFIG.enableWebVR && navigator.xr && navigator.xr.isSessionSupported) {
     }).catch(() => {});
 }
 
+// ---- マーカーAR（ar-marker.html）への導線ボタン ----
+// WebXR とは独立した仕組み（AR.js＝カメラ映像＋マーカー認識）のため、対応端末チェックは不要。
+// iOS Safari を含むほとんどの端末で動作するので、config で有効なら常に表示する。
+if (CONFIG.markerAR && CONFIG.markerAR.enableButton) {
+    const markerArBtn = document.getElementById('marker-ar-btn');
+    if (markerArBtn) markerArBtn.style.display = '';
+}
+
 // ---- AR/VRモードに入ったときの視点調整 ----
 // AR/VRセッション中はXR機器の実際の位置・向きがそのままカメラ（camera-rig）に反映され、
 // 通常モードのカメラ位置（cameraHome、orbit-controls経由の位置）は使われなくなる。

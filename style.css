@@ -82,12 +82,26 @@ body { margin: 0; overflow: hidden; }
     to { transform: rotate(360deg); }
 }
 
+/* 画面下部の表示（操作誘導 ＋ 操作方法）をまとめる縦積みコンテナ。
+   右下のボタン列（#btn-group）と重ならないよう最大幅を制限し、中で縦に積むことで
+   「自由に操作できます」と操作方法ヒントが互いに重ならないようにする。 */
+#bottom-ui {
+    position: fixed;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    /* 左右それぞれ 44px ボタン＋余白ぶんを空け、中央寄せでもボタンに掛からないようにする */
+    max-width: calc(100vw - 140px);
+    pointer-events: none;
+    z-index: 100;
+}
+
 /* 操作誘導：ユーザーが初めて触れるまでのみ表示 */
 #explore-prompt {
-    position: fixed;
-    bottom: 72px;
-    left: 50%;
-    transform: translateX(-50%);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -98,9 +112,7 @@ body { margin: 0; overflow: hidden; }
     font-family: sans-serif;
     font-size: 13px;
     letter-spacing: 0.1em;
-    pointer-events: none;
     white-space: nowrap;
-    z-index: 100;
     opacity: 0;
     transition: opacity 1.2s;
 }
@@ -114,39 +126,31 @@ body { margin: 0; overflow: hidden; }
     to   { transform: rotate(360deg); }
 }
 
-/* 操作方法：原則常時表示。右下のボタン列（#btn-group）と重ならないよう、
-   幅を画面幅からボタン列分を差し引いた範囲に収め、収まらない場合は折り返す */
+/* 操作方法：原則常時表示 */
 #controls-hint {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    max-width: calc(100vw - 96px);
     background: rgba(0, 0, 0, 0.55);
     color: #fff;
-    padding: 10px 20px;
+    padding: 8px 16px;
     border-radius: 20px;
     font-family: sans-serif;
     font-size: 13px;
     text-align: center;
+    line-height: 1.7;
+}
+/* 各操作の説明を1かたまり（フレーズ）として扱い、狭い画面ではフレーズ単位で折り返す。
+   これにより「2本指ピンチ：ズーム」の途中など、日本語としてキリの悪い位置での改行を防ぐ。 */
+.hint-phrase {
+    display: inline-block;
     white-space: nowrap;
-    pointer-events: none;
-    z-index: 100;
+    margin: 0 6px;
 }
 
-@media (max-width: 640px) {
-    #controls-hint {
-        white-space: normal;
-        line-height: 1.6;
-    }
-}
-
-.hint-pc { display: block; }
+.hint-pc { display: inline; }
 .hint-sp { display: none; }
 
 @media (pointer: coarse) {
     .hint-pc { display: none; }
-    .hint-sp { display: block; }
+    .hint-sp { display: inline; }
 }
 
 /* MIT License | github.com/ChikumaTateshina/Web3DViewer */

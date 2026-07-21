@@ -99,10 +99,20 @@ if (CONFIG.enableWebVR && navigator.xr && navigator.xr.isSessionSupported) {
 // AR/VRセッション中はXR機器の実際の位置・向きがそのままカメラ（camera-rig）に反映され、
 // 通常モードのカメラ位置（cameraHome、orbit-controls経由の位置）は使われなくなる。
 // camera-rig の位置・向きはXR機器のトラッキングに完全に委ね、書き換えない。
+// これにより、現実空間に固定された（world-locked）モデルの周りを、端末を持って実際に
+// 動くことで横からのぞき込む——といった動作が成立する（端末が位置トラッキングに対応している場合）。
 // camera-rig を包む xr-rig（親エンティティ）の位置を「XRトラッキング空間の原点オフセット」
 // として使い、AR/VRに入った瞬間だけ CONFIG.xrCameraPosition を適用する。
 const xrPos = CONFIG.xrCameraPosition;
 scene.addEventListener('enter-vr', () => {
+    // XR中は自動オービット・アイドル・ジャイロを止める。これらは毎フレーム camera-rig の位置を
+    // 直接書き換えるため、動かしたままだとXR機器のトラッキング姿勢を上書きしてしまい、
+    // 「現実空間で動いても視点が動かない／操作できない」原因になる。
+    inXR = true;
+    disableGyro();
+    stopIdle();
+    clearTimeout(idleTimer);
+
     xrRig.setAttribute('position', `${xrPos.x} ${xrPos.y} ${xrPos.z}`);
 
     if (!scene.is('ar-mode')) {
@@ -112,22 +122,18 @@ scene.addEventListener('enter-vr', () => {
         // に対応していれば、実際に持って歩いた分の移動もそのまま重ねて反映される
         xrRig.setAttribute('movement-controls', 'controls: touch, keyboard; fly: false');
     }
-    // AR/ジャイロモード中の1〜3本指操作（モデルの回転・拡縮・移動）は arTouch* が担当するため、
-    // camera-rig の orbit-controls はAR中も無効のままにする（aframe-orbit-controls の既定動作）
 });
 
 scene.addEventListener('exit-vr', () => {
+    inXR = false;
     xrRig.setAttribute('position', '0 0 0');
     xrRig.removeAttribute('movement-controls');
 
     // camera-rig の位置・向きはXR機器のトラッキングに委ねていたため、セッション終了時点では
-    // 設定したホーム位置とは無関係な値が残っている。通常モードに戻ったら明示的にホームへ戻す
-    const oc = getOC();
-    if (oc && oc.controls) {
-        const camObj = getCamObj(oc);
-        if (camObj) camObj.position.set(HOME.px, HOME.py, HOME.pz);
-        oc.controls.target.set(HOME.tx, HOME.ty, HOME.tz);
-    }
+    // 設定したホーム位置とは無関係な値が残っている。通常モードに戻ったら、その場の値を一度きり
+    // 書き換えるだけだとA-Frameのセッション後処理に上書きされて原点に残ることがあるため、
+    // アニメーションで数フレームかけてホーム視点へ確実に戻す（原点に取り残されるのを防ぐ）。
+    animateToHome(0.08);
 });
 
 // ---- 端末の向きで視点操作するボタン（対応端末のみ表示） ----
@@ -178,6 +184,7 @@ let isResetting       = false;
 let idleReturnHome    = false; // 無操作が長く続いた後、ホーム視点へなめらかに戻している最中か
 let userHasInteracted = false;
 let resetAnim         = null;
+let inXR              = false; // AR/VRセッション中か（trueの間は自動オービット等でカメラを書き換えない）
 
 // オービット用の球面座標（null = 次の idle 開始時に再初期化）
 let orbitTheta = null;
@@ -323,10 +330,16 @@ function disableGyro() {
     window.removeEventListener('deviceorientation', onDeviceOrientation);
 
     const oc = getOC();
-    if (oc && oc.controls) oc.controls.enabled = true;
+    if (oc && oc.controls) {
+        // ジャイロ中は注視点をカメラの遠く前方に置いていたため、そのまま orbit-controls を
+        // 再開するとその遠い点を中心に周回してしまう。注視点をモデル中心（ホーム注視点）へ
+        // 戻してから再開し、通常どおりモデルを中心に周回できるようにする。
+        oc.controls.target.set(HOME.tx, HOME.ty, HOME.tz);
+        oc.controls.enabled = true;
+    }
 
     gyroBtn.classList.remove('active');
-    idleTimer = setTimeout(startIdle, ORBIT_DELAY * 1000);
+    if (!inXR) idleTimer = setTimeout(startIdle, ORBIT_DELAY * 1000);
 }
 
 // ---- 端末の向き rAF ループ ----
@@ -339,11 +352,15 @@ function disableGyro() {
 // 実際のカメラ〜注視点間の距離を毎回読み直して使う。固定してしまうと、ピンチズームで
 // 距離が変わってもジャイロが毎フレーム元の距離に戻してしまい、ズームが効かなくなるため。
 //
+// orbit-controls は enableGyro で無効化してあるため、注視点(target)を書き換えるだけでは
+// カメラの向きは変わらない（無効時は controls.update() が呼ばれないため）。そこで毎フレーム
+// camObj.lookAt() を明示的に呼び、カメラをその注視点へ実際に向ける（＝一人称の首振り）。
+//
 // 上下方向（dBeta）の向き： 端末を上に傾ける（見上げる）→ phi が小さくなる方向（視線が上を向く）
 //                          端末を下に傾ける（見下ろす）→ phi が大きくなる方向（視線が下を向く）
 // 実機での向きが逆に感じる場合は、下の dBeta の符号（+ / -）を反転してください。
 function gyroLoop() {
-    if (gyroActive && gyroBase && lastOrientation) {
+    if (gyroActive && !inXR && gyroBase && lastOrientation) {
         const oc = getOC();
         if (oc && oc.controls) {
             const camObj = getCamObj(oc);
@@ -365,6 +382,8 @@ function gyroLoop() {
                 target.x = camObj.position.x + curDistance * sinPhi * Math.sin(theta);
                 target.y = camObj.position.y + curDistance * cosPhi;
                 target.z = camObj.position.z + curDistance * sinPhi * Math.cos(theta);
+
+                camObj.lookAt(target.x, target.y, target.z);
             }
         }
     }
@@ -467,9 +486,9 @@ document.addEventListener('touchcancel', onArTouchEnd,   { passive: true });
 function autoOrbitLoop(timestamp) {
     const t  = timestamp * 0.001; // 秒
     const dt = orbitLastTime === null ? 0 : Math.min(t - orbitLastTime, 0.1);
-    orbitLastTime = isIdle && !gyroActive ? t : null;
+    orbitLastTime = isIdle && !gyroActive && !inXR ? t : null;
 
-    if (isIdle && !gyroActive) {
+    if (isIdle && !gyroActive && !inXR) {
         const oc = getOC();
         if (oc && oc.controls) {
             const camObj = getCamObj(oc);
@@ -593,6 +612,39 @@ function onUserInteraction() {
 // ページロード後 2 秒でアイドル開始
 idleTimer = setTimeout(startIdle, 2000);
 
+// ---- ホーム視点へなめらかに戻すアニメーション ----
+// 視点リセットボタンと、AR/VRセッション終了時（exit-vr）の両方から使う。
+// step が大きいほど速く戻る。毎フレーム rAF で少しずつホームへ近づける。
+function animateToHome(step) {
+    stopIdle();
+    clearTimeout(idleTimer);
+    isResetting = true;
+    cancelAnimationFrame(resetAnim);
+
+    function loop() {
+        const oc = getOC();
+        if (!oc || !oc.controls) {
+            resetAnim = requestAnimationFrame(loop);
+            return;
+        }
+
+        const camObj = getCamObj(oc);
+        if (camObj) lerpVec(camObj.position, HOME.px, HOME.py, HOME.pz, step);
+        lerpVec(oc.controls.target, HOME.tx, HOME.ty, HOME.tz, step);
+
+        const dCam = camObj ? distSq(camObj.position, HOME.px, HOME.py, HOME.pz) : 0;
+        const dTgt = distSq(oc.controls.target, HOME.tx, HOME.ty, HOME.tz);
+
+        if (dCam > 0.01 || dTgt > 0.01) {
+            resetAnim = requestAnimationFrame(loop);
+        } else {
+            isResetting = false;
+            idleTimer   = setTimeout(startIdle, ORBIT_DELAY * 1000);
+        }
+    }
+    resetAnim = requestAnimationFrame(loop);
+}
+
 // ---- 視点リセットボタン ----
 const resetBtn = document.getElementById('reset-btn');
 
@@ -601,33 +653,7 @@ resetBtn.addEventListener('click', () => {
     setTimeout(() => resetBtn.classList.remove('spinning'), 420);
 
     disableGyro();
-    stopIdle();
-    clearTimeout(idleTimer);
-    isResetting = true;
-    cancelAnimationFrame(resetAnim);
-
-    function manualResetLoop() {
-        const oc = getOC();
-        if (!oc || !oc.controls) {
-            resetAnim = requestAnimationFrame(manualResetLoop);
-            return;
-        }
-
-        const camObj = getCamObj(oc);
-        if (camObj) lerpVec(camObj.position, HOME.px, HOME.py, HOME.pz, 0.06);
-        lerpVec(oc.controls.target, HOME.tx, HOME.ty, HOME.tz, 0.06);
-
-        const dCam = camObj ? distSq(camObj.position, HOME.px, HOME.py, HOME.pz) : 0;
-        const dTgt = distSq(oc.controls.target, HOME.tx, HOME.ty, HOME.tz);
-
-        if (dCam > 0.01 || dTgt > 0.01) {
-            resetAnim = requestAnimationFrame(manualResetLoop);
-        } else {
-            isResetting = false;
-            idleTimer   = setTimeout(startIdle, ORBIT_DELAY * 1000);
-        }
-    }
-    resetAnim = requestAnimationFrame(manualResetLoop);
+    animateToHome(0.06);
 });
 
 // ---- フルスクリーン ----

@@ -42,7 +42,7 @@ body { margin: 0; overflow: hidden; }
 #reset-btn.spinning svg { transform: rotate(-360deg); }
 #gyro-btn.active,
 #gyro-btn.active:hover { background: rgba(64, 140, 255, 0.9); }
-.ar-label {
+.xr-label {
     font-family: sans-serif;
     font-size: 12px;
     font-weight: 700;

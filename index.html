@@ -18,7 +18,7 @@
         background="color: #8FA8BF"
         renderer="antialias: true; colorManagement: true; exposure: 1.05; toneMapping: ACESFilmic"
         fog="type: linear; color: #8FA8BF; near: 60; far: 120"
-        vr-mode-ui="enabled: false">
+        vr-mode-ui="enabled: false; enterVRButton: none; enterARButton: none">
 
         <a-assets></a-assets>
 
@@ -31,21 +31,25 @@
 
         <a-entity id="model-entity" position="0 0 0" rotation="0 0 0" scale="1 1 1"></a-entity>
 
-        <a-entity id="camera-rig" camera orbit-controls="
-            target: 0 2 0;
-            minDistance: 2;
-            maxDistance: 80;
-            initialPosition: 5 5 15;
-            enableDamping: true;
-            dampingFactor: 0.08;
-            rotateSpeed: 0.6;
-            zoomSpeed: 1.2;
-            enablePan: true;
-            panSpeed: 0.8;
-            enableZoom: true;
-            screenSpacePanning: true;
-            autoRotate: false;
-            autoRotateSpeed: 0.6">
+        <a-entity id="xr-rig" position="0 0 0">
+            <a-entity id="camera-rig" camera orbit-controls="
+                target: 0 2 0;
+                minDistance: 2;
+                maxDistance: 80;
+                initialPosition: 5 5 15;
+                enableDamping: true;
+                dampingFactor: 0.08;
+                rotateSpeed: 0.6;
+                zoomSpeed: 1.2;
+                enablePan: true;
+                panSpeed: 0.8;
+                enableZoom: true;
+                screenSpacePanning: true;
+                autoRotate: false;
+                autoRotateSpeed: 0.6;
+                minPolarAngle: 8;
+                maxPolarAngle: 172">
+            </a-entity>
         </a-entity>
 
     </a-scene>
@@ -57,7 +61,10 @@
             </svg>
         </button>
         <button id="ar-btn" title="ARで表示" style="display:none">
-            <span class="ar-label">AR</span>
+            <span class="xr-label">AR</span>
+        </button>
+        <button id="vr-btn" title="VRで表示" style="display:none">
+            <span class="xr-label">VR</span>
         </button>
         <button id="anim-btn" title="アニメーションを一時停止" style="display:none">
             <svg id="icon-pause" viewBox="0 0 24 24">

@@ -10,7 +10,6 @@ modelEntity.setAttribute('gltf-model', `Assets/${CONFIG.modelFile}`);
 
 const scene = document.getElementById('scene');
 scene.setAttribute('fog', `type: linear; color: ${CONFIG.fogColor}; near: ${CONFIG.fogNear}; far: ${CONFIG.fogFar}`);
-scene.setAttribute('vr-mode-ui', `enabled: ${CONFIG.enableWebVR}`);
 
 // ---- 背景（単色 or 360°パノラマ画像） ----
 if (CONFIG.backgroundType === 'image' && CONFIG.backgroundImage) {
@@ -76,7 +75,9 @@ if (CONFIG.cullBackfaces) {
     });
 }
 
-// ---- AR表示ボタン（対応端末・ブラウザのみ表示） ----
+// ---- AR/VR表示ボタン（対応端末・ブラウザのみ、それぞれ独立に表示） ----
+// vr-mode-ui のA-Frame標準ボタンは使わず、AR/VRとも同じ仕組み・同じ見た目の自前ボタンで統一する
+// （標準ボタンだと画面右下で自前のボタン群と重なって隠れてしまうため）
 if (CONFIG.enableWebAR && navigator.xr && navigator.xr.isSessionSupported) {
     navigator.xr.isSessionSupported('immersive-ar').then(supported => {
         if (!supported) return;
@@ -85,6 +86,42 @@ if (CONFIG.enableWebAR && navigator.xr && navigator.xr.isSessionSupported) {
         arBtn.addEventListener('click', () => scene.enterAR());
     }).catch(() => {});
 }
+if (CONFIG.enableWebVR && navigator.xr && navigator.xr.isSessionSupported) {
+    navigator.xr.isSessionSupported('immersive-vr').then(supported => {
+        if (!supported) return;
+        const vrBtn = document.getElementById('vr-btn');
+        vrBtn.style.display = '';
+        vrBtn.addEventListener('click', () => scene.enterVR());
+    }).catch(() => {});
+}
+
+// ---- AR/VRモードに入ったときの視点調整 ----
+// AR/VRセッション中はXR機器の実際の位置・向きがそのままカメラに反映され、通常モードの
+// カメラ位置（cameraHome、orbit-controls経由の位置）は使われなくなる。そのため、camera-rig
+// を包む xr-rig（親エンティティ）の位置を「XRトラッキング空間の原点オフセット」として使い、
+// AR/VRに入った瞬間だけ CONFIG.xrCameraPosition を適用する。
+const xrPos = CONFIG.xrCameraPosition;
+scene.addEventListener('enter-vr', () => {
+    xrRig.setAttribute('position', `${xrPos.x} ${xrPos.y} ${xrPos.z}`);
+
+    const oc = getOC();
+    if (scene.is('ar-mode')) {
+        // aframe-orbit-controls はAR/VR突入時に一律で controls を無効化してしまう。
+        // ARでは現実空間を背景にしつつ、通常どおりドラッグ回転・ピンチズーム・2本指移動を
+        // 使えるようにしたいので、ARのときだけ明示的に再度有効化する
+        if (oc && oc.controls) oc.controls.enabled = true;
+    } else {
+        // VR: 視点の向きはヘッドセット/端末の向きがそのまま反映されるので orbit-controls の
+        // ドラッグ回転は使わない（無効化されたまま）。前後左右の移動だけタッチ/キーボードで
+        // 行えるようにする
+        rig.setAttribute('movement-controls', 'controls: touch, keyboard; fly: false');
+    }
+});
+
+scene.addEventListener('exit-vr', () => {
+    xrRig.setAttribute('position', '0 0 0');
+    rig.removeAttribute('movement-controls');
+});
 
 // ---- 端末の向きで視点操作するボタン（対応端末のみ表示） ----
 const gyroBtn = document.getElementById('gyro-btn');
@@ -101,7 +138,8 @@ if (CONFIG.enableDeviceOrientation && window.DeviceOrientationEvent && window.ma
     });
 }
 
-const rig = document.getElementById('camera-rig');
+const xrRig = document.getElementById('xr-rig');
+const rig   = document.getElementById('camera-rig');
 rig.setAttribute('orbit-controls', `
     target: ${HOME.tx} ${HOME.ty} ${HOME.tz};
     minDistance: 2;
@@ -116,7 +154,9 @@ rig.setAttribute('orbit-controls', `
     enableZoom: true;
     screenSpacePanning: true;
     autoRotate: false;
-    autoRotateSpeed: 0.6`);
+    autoRotateSpeed: 0.6;
+    minPolarAngle: 8;
+    maxPolarAngle: 172`);
 
 const ORBIT_DELAY = CONFIG.idleOrbitDelaySec;  // 無操作後に自動回転を開始するまでの秒数
 const RESET_DELAY = CONFIG.idleResetDelaySec;  // 無操作後に視点をリセットするまでの秒数
@@ -190,12 +230,14 @@ function randomizePhiTarget() {
 }
 
 // ---- 端末の向き連動用の状態 ----
-let gyroActive      = false;
-let gyroBase        = null;          // 有効化した瞬間の端末の向き（基準値）
-let lastOrientation = null;          // 直近の deviceorientation イベント値
-let gyroTheta       = 0;             // 有効化した瞬間のカメラの水平角
-let gyroPhi         = Math.PI / 2;   // 有効化した瞬間のカメラの仰角
-let gyroRadius      = 15;            // 有効化した瞬間のカメラ〜注視点の距離（そのまま維持）
+// 「注視点を中心にカメラが周回する」オービット方式ではなく、カメラの位置はその場から動かさず、
+// 視線の向き（＝注視点の位置）だけを端末の傾きに応じて変える一人称視点の首振りとして扱う。
+let gyroActive       = false;
+let gyroBase         = null;          // 有効化した瞬間の端末の向き（基準値）
+let lastOrientation  = null;          // 直近の deviceorientation イベント値
+let gyroTheta        = 0;             // 有効化した瞬間の視線方向の水平角
+let gyroPhi          = Math.PI / 2;   // 有効化した瞬間の視線方向の仰角
+let gyroLookDistance = 15;            // 注視点をカメラの前方どれだけ先に置くか（見た目には影響しない）
 
 function getOC() {
     return rig.components && rig.components['orbit-controls'];
@@ -245,18 +287,20 @@ function enableGyro() {
     if (!camObj) return;
     const target = oc.controls.target;
 
-    // 現在のカメラ位置（＝その時点の視点）から球面座標を取得し、そのまま起点にする
-    const dx = camObj.position.x - target.x;
-    const dy = camObj.position.y - target.y;
-    const dz = camObj.position.z - target.z;
-    gyroRadius = Math.sqrt(dx*dx + dy*dy + dz*dz) || 15;
-    gyroTheta  = Math.atan2(dx, dz);
-    gyroPhi    = Math.acos(Math.max(-1, Math.min(1, dy / gyroRadius)));
+    // 現在の視線方向（カメラ位置→注視点）を球面座標として取得し、そのまま起点にする
+    const dx = target.x - camObj.position.x;
+    const dy = target.y - camObj.position.y;
+    const dz = target.z - camObj.position.z;
+    gyroLookDistance = Math.sqrt(dx*dx + dy*dy + dz*dz) || 15;
+    gyroTheta = Math.atan2(dx, dz);
+    gyroPhi   = Math.acos(Math.max(-1, Math.min(1, dy / gyroLookDistance)));
 
     gyroBase        = null;
     lastOrientation = null;
     gyroActive      = true;
-    oc.controls.enableRotate = false; // ジャイロ操作中はドラッグ回転と競合しないよう無効化
+    // カメラの位置自体は動かさないので、ドラッグでの回転（enableRotate）やピンチズームは
+    // ジャイロ操作中も引き続き使える（ドラッグで位置を動かせば、その新しい位置を起点として
+    // ジャイロでの視線変更が続く）
 
     stopIdle();
     clearTimeout(idleTimer);
@@ -278,8 +322,18 @@ function disableGyro() {
 }
 
 // ---- 端末の向き rAF ループ ----
-// deviceorientation イベントの値を毎フレーム反映し、有効化時点のカメラ位置（半径・注視点）を
-// 保ったまま、端末の向きの変化分だけカメラを球面上で回転させる。
+// deviceorientation イベントの値を毎フレーム反映する。カメラの位置（camObj.position）は
+// 一切書き換えず、その場に固定したまま、視線の先＝注視点（target）だけを端末の傾きに応じて
+// 動かす（＝その場での一人称視点の首振り）。位置を毎フレーム読み直しているので、ドラッグでの
+// 回転やピンチズームでカメラの位置が変わっても、その新しい位置を起点に視線変更が続けられる。
+//
+// 注視点を置く距離は、有効化した瞬間の値（gyroLookDistance）に固定せず、直前フレームの
+// 実際のカメラ〜注視点間の距離を毎回読み直して使う。固定してしまうと、ピンチズームで
+// 距離が変わってもジャイロが毎フレーム元の距離に戻してしまい、ズームが効かなくなるため。
+//
+// 上下方向（dBeta）の向き： 端末を上に傾ける（見上げる）→ phi が小さくなる方向（視線が上を向く）
+//                          端末を下に傾ける（見下ろす）→ phi が大きくなる方向（視線が下を向く）
+// 実機での向きが逆に感じる場合は、下の dBeta の符号（+ / -）を反転してください。
 function gyroLoop() {
     if (gyroActive && gyroBase && lastOrientation) {
         const oc = getOC();
@@ -287,17 +341,22 @@ function gyroLoop() {
             const camObj = getCamObj(oc);
             const target = oc.controls.target;
             if (camObj) {
+                const ddx = target.x - camObj.position.x;
+                const ddy = target.y - camObj.position.y;
+                const ddz = target.z - camObj.position.z;
+                const curDistance = Math.sqrt(ddx*ddx + ddy*ddy + ddz*ddz) || gyroLookDistance;
+
                 const dAlpha = angleDeltaDeg(lastOrientation.alpha, gyroBase.alpha) * Math.PI / 180;
                 const dBeta  = ((lastOrientation.beta || 0) - gyroBase.beta) * Math.PI / 180;
 
                 const theta = gyroTheta - dAlpha;
-                let phi     = gyroPhi - dBeta;
+                let phi     = gyroPhi + dBeta;
                 phi = Math.max(0.15, Math.min(Math.PI - 0.15, phi)); // 真上・真下付近での反転を防止
 
                 const sinPhi = Math.sin(phi), cosPhi = Math.cos(phi);
-                camObj.position.x = target.x + gyroRadius * sinPhi * Math.sin(theta);
-                camObj.position.y = target.y + gyroRadius * cosPhi;
-                camObj.position.z = target.z + gyroRadius * sinPhi * Math.cos(theta);
+                target.x = camObj.position.x + curDistance * sinPhi * Math.sin(theta);
+                target.y = camObj.position.y + curDistance * cosPhi;
+                target.z = camObj.position.z + curDistance * sinPhi * Math.cos(theta);
             }
         }
     }

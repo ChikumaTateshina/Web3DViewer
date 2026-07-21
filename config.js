@@ -68,7 +68,7 @@ const VIEWER_CONFIG = {
     idleOrbitDelaySec: 5,
 
     // 無操作状態が続いたときに初期視点へ自動的に戻るまでの秒数
-    idleResetDelaySec: 60
+    idleResetDelaySec: 10
 };
 
 // MIT License | github.com/ChikumaTateshina/Web3DViewer

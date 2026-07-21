@@ -62,7 +62,7 @@ const VIEWER_CONFIG = {
 
     // 初期カメラ位置 (px, py, pz) と注視点 (tx, ty, tz)
     // 「視点をリセット」ボタンや自動リセットもこの位置に戻ります
-    cameraHome: { px: 15, py: 15, pz: 15, tx: 0, ty: 2, tz: 0 },
+    cameraHome: { px: 20, py: 20, pz: 15, tx: 0, ty: 2, tz: 0 },
 
     // 無操作状態が続いたときに自動回転を開始するまでの秒数
     idleOrbitDelaySec: 5,
@@ -74,15 +74,15 @@ const VIEWER_CONFIG = {
     autoOrbit: {
         // 水平方向の回転速度の範囲（度/秒）。この範囲内でランダムに変化し続けます
         // （値を大きくするほど速く回転します。min/maxを同じ値にすると常に一定速度になります）
-        speedMinDeg: 10,
-        speedMaxDeg: 25,
+        speedMinDeg: 25,
+        speedMaxDeg: 90,
 
         // 上下方向のランダムな揺れの可動範囲（度）。cameraHomeで指定した見上げ角を中心に、
         // この範囲内で上下にゆっくり揺れ動きます（0にすると上下には揺れなくなります）
         verticalRangeDeg: 90,
 
         // 上下方向の揺れの変化速度の最大値（度/秒）
-        verticalSpeedMaxDeg: 25
+        verticalSpeedMaxDeg: 50
     }
 };
 

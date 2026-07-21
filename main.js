@@ -128,12 +128,49 @@ let resetTimer        = null;
 let exploreTimer      = null;
 let isIdle            = false;
 let isResetting       = false;
+let idleReturnHome    = false; // 無操作が長く続いた後、ホーム視点へなめらかに戻している最中か
 let userHasInteracted = false;
 let resetAnim         = null;
 
 // オービット用の球面座標（null = 次の idle 開始時に再初期化）
 let orbitTheta = null;
 let orbitR     = null;
+let orbitPhi   = null;
+
+// オービットの水平回転・仰角変化の「現在速度」と、なめらかに近づけていく「目標速度」
+// （目標速度を一定間隔でランダムに選び直すことで、毎回異なる軌道になる）
+let orbitThetaSpeed     = 0;
+let orbitThetaSpeedGoal = 0;
+let orbitPhiSpeed       = 0;
+let orbitPhiSpeedGoal   = 0;
+let orbitLastTime       = null; // 前フレームのtimestamp（秒）。dt算出用
+let orbitRetargetAt     = 0;    // 次に目標速度を選び直すtimestamp（秒）
+
+const ORBIT_PHI_CENTER       = Math.PI / 2.4; // 仰角の基準値（約75°）
+const ORBIT_PHI_RANGE        = Math.PI / 10;  // 仰角の可動範囲（±18°）
+const ORBIT_THETA_SPEED_MAX  = 0.09;          // 水平回転速度の最大値（rad/秒）
+const ORBIT_PHI_SPEED_MAX    = 0.05;          // 仰角変化速度の最大値（rad/秒）
+const ORBIT_SPEED_EASE_SEC   = 1.5;           // 目標速度へなめらかに近づくまでの目安秒数
+const ORBIT_RETARGET_MIN_SEC = 3;             // 次に目標速度を選び直すまでの最小秒数
+const ORBIT_RETARGET_MAX_SEC = 7;             // 同・最大秒数
+const ORBIT_RETURN_EASE_SEC  = 6;             // 無操作が続いた後、ズーム・仰角・注視点をホームへ戻す際の滑らかさの目安秒数
+
+// ホーム視点を球面座標（注視点からの距離・仰角）に変換しておく。
+// 無操作が続いた際、水平回転は継続したまま、ズーム・仰角・注視点だけをこの値へなめらかに近づける。
+const HOME_ORBIT = (() => {
+    const dx = HOME.px - HOME.tx;
+    const dy = HOME.py - HOME.ty;
+    const dz = HOME.pz - HOME.tz;
+    const r  = Math.sqrt(dx * dx + dy * dy + dz * dz) || 15;
+    return { r, phi: Math.acos(Math.max(-1, Math.min(1, dy / r))) };
+})();
+
+// 水平回転・仰角変化の目標速度をランダムに選び直す（0付近を避けて完全停止しないようにする）
+function randomizeOrbitTargets() {
+    const thetaSign = Math.random() < 0.5 ? -1 : 1;
+    orbitThetaSpeedGoal = thetaSign * ORBIT_THETA_SPEED_MAX * (0.3 + Math.random() * 0.7);
+    orbitPhiSpeedGoal   = (Math.random() * 2 - 1) * ORBIT_PHI_SPEED_MAX;
+}
 
 // ---- 端末の向き連動用の状態 ----
 let gyroActive      = false;
@@ -254,30 +291,67 @@ requestAnimationFrame(gyroLoop);
 // ---- 自動オービット rAF ループ ----
 // autoRotate に依存せず、毎フレーム球面座標でカメラ位置を直接計算・設定する。
 // OrbitControls は次の update() でこの位置を読み取り、そのまま維持する。
+// 水平回転・仰角の速度を一定間隔でランダムに選び直し、そこへなめらかに近づけることで、
+// 毎回異なる・その場でリアルタイムに揺らぐ軌道になる（決まりきった周期運動にはならない）。
 function autoOrbitLoop(timestamp) {
-    if (isIdle && !isResetting && !gyroActive) {
+    const t  = timestamp * 0.001; // 秒
+    const dt = orbitLastTime === null ? 0 : Math.min(t - orbitLastTime, 0.1);
+    orbitLastTime = isIdle && !gyroActive ? t : null;
+
+    if (isIdle && !gyroActive) {
         const oc = getOC();
         if (oc && oc.controls) {
             const camObj = getCamObj(oc);
             if (camObj) {
                 const target = oc.controls.target;
 
-                // 初回: 現在位置から球面座標を取得
+                // 初回: 現在位置から球面座標を取得し、目標速度も新たに抽選
                 if (orbitTheta === null) {
                     const dx = camObj.position.x - target.x;
                     const dy = camObj.position.y - target.y;
                     const dz = camObj.position.z - target.z;
                     orbitR     = Math.sqrt(dx*dx + dy*dy + dz*dz) || 15;
                     orbitTheta = Math.atan2(dx, dz);
+                    orbitPhi   = Math.acos(Math.max(-1, Math.min(1, dy / orbitR)));
+                    randomizeOrbitTargets();
+                    orbitRetargetAt = t + ORBIT_RETARGET_MIN_SEC + Math.random() * (ORBIT_RETARGET_MAX_SEC - ORBIT_RETARGET_MIN_SEC);
                 }
 
-                const t = timestamp * 0.001; // 秒
-                orbitTheta += 0.001;          // ~3.4°/s の水平回転
+                // 一定間隔で目標速度を選び直す
+                if (t >= orbitRetargetAt) {
+                    randomizeOrbitTargets();
+                    orbitRetargetAt = t + ORBIT_RETARGET_MIN_SEC + Math.random() * (ORBIT_RETARGET_MAX_SEC - ORBIT_RETARGET_MIN_SEC);
+                }
 
-                // 仰角: sin 波でゆったり上下（75° 中心 ±18°、周期 ~35 秒）
-                const phi    = Math.PI / 2.4 + Math.sin(t * 0.18) * (Math.PI / 10);
-                const sinPhi = Math.sin(phi);
-                const cosPhi = Math.cos(phi);
+                // 現在速度を目標速度へなめらかに近づける（急な方向転換を避ける）
+                const ease = dt > 0 ? Math.min(1, dt / ORBIT_SPEED_EASE_SEC) : 0;
+                orbitThetaSpeed += (orbitThetaSpeedGoal - orbitThetaSpeed) * ease;
+                orbitPhiSpeed   += (orbitPhiSpeedGoal   - orbitPhiSpeed)   * ease;
+
+                orbitTheta += orbitThetaSpeed * dt;
+
+                if (idleReturnHome) {
+                    // 無操作が長く続いた場合：水平回転（テーマ）はそのまま続けつつ、
+                    // ズーム（半径）・仰角・注視点だけをホーム視点へなめらかに近づける。
+                    // 一気に戻す（テレポート/直線移動）のではなく、自動回転を続けながら徐々に収束させる。
+                    const returnEase = dt > 0 ? Math.min(1, dt / ORBIT_RETURN_EASE_SEC) : 0;
+                    orbitR   += (HOME_ORBIT.r   - orbitR)   * returnEase;
+                    orbitPhi += (HOME_ORBIT.phi - orbitPhi) * returnEase;
+                    lerpVec(target, HOME.tx, HOME.ty, HOME.tz, returnEase);
+                } else {
+                    const phiMin = ORBIT_PHI_CENTER - ORBIT_PHI_RANGE;
+                    const phiMax = ORBIT_PHI_CENTER + ORBIT_PHI_RANGE;
+                    let nextPhi  = orbitPhi + orbitPhiSpeed * dt;
+                    if (nextPhi < phiMin || nextPhi > phiMax) {
+                        nextPhi = Math.max(phiMin, Math.min(phiMax, nextPhi));
+                        orbitPhiSpeed     *= -1; // 可動範囲の端で自然に跳ね返す
+                        orbitPhiSpeedGoal *= -1;
+                    }
+                    orbitPhi = nextPhi;
+                }
+
+                const sinPhi = Math.sin(orbitPhi);
+                const cosPhi = Math.cos(orbitPhi);
 
                 camObj.position.x = target.x + orbitR * sinPhi * Math.sin(orbitTheta);
                 camObj.position.y = target.y + orbitR * cosPhi;
@@ -291,8 +365,9 @@ requestAnimationFrame(autoOrbitLoop);
 
 // ---- 待機状態の開始・終了 ----
 function startIdle() {
-    isIdle      = true;
-    orbitTheta  = null; // 現在位置から再初期化してオービット開始
+    isIdle         = true;
+    idleReturnHome = false;
+    orbitTheta     = null; // 現在位置から再初期化してオービット開始
 
     if (!userHasInteracted) {
         exploreTimer = setTimeout(() => {
@@ -300,50 +375,22 @@ function startIdle() {
         }, 1500);
     }
 
-    resetTimer = setTimeout(doAutoReset, RESET_DELAY * 1000);
+    // RESET_DELAY 秒後：位置を直接リセットするのではなく、以降の autoOrbitLoop で
+    // 自動回転を続けながらズーム・仰角・注視点をホーム視点へなめらかに戻す
+    resetTimer = setTimeout(() => { idleReturnHome = true; }, RESET_DELAY * 1000);
 }
 
 function stopIdle() {
-    isIdle      = false;
-    isResetting = false;
-    orbitTheta  = null;
-    orbitR      = null;
+    isIdle         = false;
+    isResetting    = false;
+    idleReturnHome = false;
+    orbitTheta     = null;
+    orbitR         = null;
+    orbitPhi       = null;
     clearTimeout(exploreTimer);
     clearTimeout(resetTimer);
     cancelAnimationFrame(resetAnim);
     explorePrompt.classList.remove('visible');
-}
-
-// ---- 自動リセット（RESET_DELAY 秒後） ----
-function doAutoReset() {
-    isResetting = true;
-    cancelAnimationFrame(resetAnim);
-
-    function resetLoop() {
-        if (!isIdle) { isResetting = false; return; }
-
-        const oc = getOC();
-        if (!oc || !oc.controls) {
-            resetAnim = requestAnimationFrame(resetLoop);
-            return;
-        }
-
-        const camObj = getCamObj(oc);
-        if (camObj) lerpVec(camObj.position, HOME.px, HOME.py, HOME.pz, 0.03);
-        lerpVec(oc.controls.target, HOME.tx, HOME.ty, HOME.tz, 0.03);
-
-        const dCam = camObj ? distSq(camObj.position, HOME.px, HOME.py, HOME.pz) : 0;
-        const dTgt = distSq(oc.controls.target, HOME.tx, HOME.ty, HOME.tz);
-
-        if (dCam > 0.02 || dTgt > 0.02) {
-            resetAnim = requestAnimationFrame(resetLoop);
-        } else {
-            // HOME 到達 → オービット再開（autoOrbitLoop が位置から再初期化）
-            isResetting = false;
-            orbitTheta  = null;
-        }
-    }
-    resetAnim = requestAnimationFrame(resetLoop);
 }
 
 // ---- ユーザー操作ハンドラ ----

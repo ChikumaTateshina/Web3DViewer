@@ -7,15 +7,10 @@ body { margin: 0; overflow: hidden; }
 .a-orientation-modal,
 .a-loader-title { display: none !important; }
 
-/* AR.js が挿入するカメラ映像(video)を画面全体に敷く */
-.a-canvas, video {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: cover;
-}
+/* カメラ映像(#arjs-video)とcanvasのサイズ・位置は AR.js／A-Frame が
+   カメラ解像度に合わせて計算し、画面全体を覆うように配置する。
+   ここで width/height を上書きすると、その計算（中央寄せのための margin-left など）が
+   壊れて映像がずれる（画面の片側が空白になる）ため、あえて何も指定しない。 */
 
 /* マーカー未検出時の案内（画面上部中央） */
 #ar-hint {
